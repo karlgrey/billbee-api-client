@@ -173,10 +173,15 @@ zeroValueFromThisPage = zeroValueFromThisPage.map(order => {
   }
 });
 
+
 // Get multiple orders by InvoiceNumbers - query parameter method
 app.get('/orders/by-invoice-ids', async (req, res) => {
   try {
     const invoiceIds = req.query.ids ? req.query.ids.split(',') : [];
+    
+    console.log('=== DEBUG: Invoice ID Search ===');
+    console.log('Raw query.ids:', req.query.ids);
+    console.log('Parsed invoiceIds:', invoiceIds);
     
     if (invoiceIds.length === 0) {
       return res.status(400).json({
@@ -189,6 +194,7 @@ app.get('/orders/by-invoice-ids', async (req, res) => {
     let foundOrders = [];
     let currentPage = 1;
     let totalPages = 1;
+    let totalOrdersSearched = 0;
     
     // Search through all pages
     while (currentPage <= totalPages) {
@@ -199,17 +205,44 @@ app.get('/orders/by-invoice-ids', async (req, res) => {
       
       const response = await billbeeAPI.get('/orders', { params });
       totalPages = response.data.Paging.TotalPages;
+      const ordersOnThisPage = response.data.Data || [];
+      totalOrdersSearched += ordersOnThisPage.length;
+      
+      console.log(`Page ${currentPage}: Found ${ordersOnThisPage.length} orders`);
+      
+      // Debug: Show some sample InvoiceNumbers from this page
+      if (currentPage === 1 && ordersOnThisPage.length > 0) {
+        console.log('Sample InvoiceNumbers from first page:');
+        ordersOnThisPage.slice(0, 5).forEach(order => {
+          console.log(`  Order ID: ${order.Id}, InvoiceNumber: "${order.InvoiceNumber}" (type: ${typeof order.InvoiceNumber})`);
+        });
+      }
       
       // Find orders matching any of the provided InvoiceNumbers
-      const matchingOrders = response.data.Data.filter(order => 
-        order.InvoiceNumber && invoiceIds.includes(order.InvoiceNumber.toString())
-      );
+      const matchingOrders = ordersOnThisPage.filter(order => {
+        if (!order.InvoiceNumber) return false;
+        
+        const orderInvoiceStr = order.InvoiceNumber.toString();
+        const match = invoiceIds.includes(orderInvoiceStr);
+        
+        // Debug each comparison
+        if (currentPage === 1) {
+          console.log(`Checking order ${order.Id}: "${orderInvoiceStr}" against [${invoiceIds.join(', ')}] = ${match}`);
+        }
+        
+        return match;
+      });
+      
+      if (matchingOrders.length > 0) {
+        console.log(`Found ${matchingOrders.length} matching orders on page ${currentPage}`);
+      }
       
       foundOrders = foundOrders.concat(matchingOrders);
       currentPage++;
       
       // Stop if we found all requested orders
       if (foundOrders.length === invoiceIds.length) {
+        console.log('Found all requested orders, stopping search');
         break;
       }
       
@@ -218,6 +251,11 @@ app.get('/orders/by-invoice-ids', async (req, res) => {
         console.log(`Searched ${currentPage - 1}/${totalPages} pages, found ${foundOrders.length}/${invoiceIds.length} orders`);
       }
     }
+    
+    console.log(`=== SEARCH COMPLETE ===`);
+    console.log(`Total orders searched: ${totalOrdersSearched}`);
+    console.log(`Total pages searched: ${currentPage - 1}`);
+    console.log(`Found orders: ${foundOrders.length}`);
     
     res.json({
       success: true,
@@ -228,7 +266,12 @@ app.get('/orders/by-invoice-ids', async (req, res) => {
       notFound: invoiceIds.filter(id => 
         !foundOrders.some(order => order.InvoiceNumber && order.InvoiceNumber.toString() === id)
       ),
-      searchedPages: currentPage - 1
+      searchedPages: currentPage - 1,
+      totalOrdersSearched: totalOrdersSearched,
+      debug: {
+        rawQuery: req.query.ids,
+        parsedIds: invoiceIds
+      }
     });
     
   } catch (error) {
@@ -239,6 +282,7 @@ app.get('/orders/by-invoice-ids', async (req, res) => {
     });
   }
 });
+
 
 // Get products example
 app.get('/products', async (req, res) => {
