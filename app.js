@@ -75,28 +75,59 @@ app.get('/orders', async (req, res) => {
   }
 });
 
-// Specific endpoint for zero-value orders
+// Endpoint for zero-value orders - fetch and filter locally
 app.get('/orders/zero-value', async (req, res) => {
   try {
-    const params = {
-      minTotalValue: 0,
-      maxTotalValue: 0, // This should filter for exactly 0 EUR
-      pageSize: req.query.pageSize ? parseInt(req.query.pageSize) : 50
-    };
+    const requestedPage = req.query.page ? parseInt(req.query.page) : 1;
+    const requestedPageSize = req.query.pageSize ? parseInt(req.query.pageSize) : 50;
     
-    // Allow pagination for zero-value orders
-    if (req.query.page) params.page = parseInt(req.query.page);
-
-    const response = await billbeeAPI.get('/orders', { params });
+    let allZeroValueOrders = [];
+    let currentPage = 1;
+    let hasMorePages = true;
+    
+    // We need to fetch multiple pages to find all zero-value orders
+    while (hasMorePages && allZeroValueOrders.length < 1000) { // Safety limit
+      const params = {
+        page: currentPage,
+        pageSize: 250, // Maximum allowed by API
+      };
+      
+      // Add any date filters if provided
+      if (req.query.minOrderDate) params.minOrderDate = req.query.minOrderDate;
+      if (req.query.maxOrderDate) params.maxOrderDate = req.query.maxOrderDate;
+      if (req.query.shopId) params.shopId = req.query.shopId;
+      
+      const response = await billbeeAPI.get('/orders', { params });
+      
+      // Filter for zero-value orders from this page
+      const zeroValueFromThisPage = response.data.Data.filter(order => 
+        order.TotalCost === 0
+      );
+      
+      allZeroValueOrders = allZeroValueOrders.concat(zeroValueFromThisPage);
+      
+      // Check if we need to fetch more pages
+      hasMorePages = currentPage < response.data.Paging.TotalPages && currentPage < 5; // Limit to 5 pages for performance
+      currentPage++;
+    }
+    
+    // Handle pagination of filtered results
+    const startIndex = (requestedPage - 1) * requestedPageSize;
+    const endIndex = startIndex + requestedPageSize;
+    const paginatedOrders = allZeroValueOrders.slice(startIndex, endIndex);
     
     res.json({
       success: true,
       description: "Orders with total value of 0 EUR",
-      pagination: response.data.Paging,
-      totalZeroValueOrders: response.data.Paging?.TotalRows || 0,
-      orders: response.data.Data || [],
-      endpoint: "GET /orders/zero-value",
-      queryParams: "?page=1&pageSize=50 (optional)"
+      pagination: {
+        page: requestedPage,
+        pageSize: requestedPageSize,
+        totalZeroValueOrders: allZeroValueOrders.length,
+        totalPages: Math.ceil(allZeroValueOrders.length / requestedPageSize)
+      },
+      orders: paginatedOrders,
+      searchedPages: currentPage - 1,
+      availableFilters: "?minOrderDate=YYYY-MM-DDTHH:mm:ss&maxOrderDate=YYYY-MM-DDTHH:mm:ss&shopId=123&page=1&pageSize=50"
     });
     
   } catch (error) {
