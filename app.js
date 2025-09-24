@@ -1,39 +1,4 @@
-201~200~// Debug version - replace your /orders route with this temporarily
-app.get('/orders', async (req, res) => {
-  try {
-      const params = {};
-
-              // Only test pagination first
-                  if (req.query.page) params.page = parseInt(req.query.page);
-                      if (req.query.pageSize) params.pageSize = parseInt(req.query.pageSize);
-
-                              // Log what we're sending
-                                  console.log('Query params from request:', req.query);
-                                      console.log('Params being sent to Billbee:', params);
-
-                                              const response = await billbeeAPI.get('/orders', { params });
-
-                                                      console.log('Response pagination:', response.data.Paging);
-
-                                                              res.json({
-                                                                    debug: {
-                                                                            receivedQuery: req.query,
-                                                                                    sentParams: params,
-                                                                                            fullUrl: `${BILLBEE_BASE_URL}/orders?${new URLSearchParams(params).toString()}`
-                                                                                                  },
-                                                                                                        pagination: response.data.Paging,
-                                                                                                              orderCount: response.data.Data?.length || 0,
-                                                                                                                    firstOrder: response.data.Data?.[0]?.Id || 'none'
-                                                                                                                        });
-
-                                                                                                                              } catch (error) {
-                                                                                                                                  console.error('Error:', error.response?.data || error.message);
-                                                                                                                                      res.status(500).json({ 
-                                                                                                                                            error: error.message,
-                                                                                                                                                  details: error.response?.data
-                                                                                                                                                      });
-                                                                                                                                                        }
-                                                                                                                                                        });require('dotenv').config();
+require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
 
@@ -64,9 +29,55 @@ app.get('/', (req, res) => {
   res.json({ message: 'Billbee API Client is running!' });
 });
 
+// Enhanced orders endpoint with query parameters
+app.get('/orders', async (req, res) => {
+  try {
+    // Build query parameters
+    const params = {};
+    
+    // Pagination
+    if (req.query.page) params.page = req.query.page;
+    if (req.query.pageSize) params.pageSize = req.query.pageSize;
+    
+    // Date filters
+    if (req.query.createdAtMin) params.createdAtMin = req.query.createdAtMin;
+    if (req.query.createdAtMax) params.createdAtMax = req.query.createdAtMax;
+    if (req.query.modifiedAtMin) params.modifiedAtMin = req.query.modifiedAtMin;
+    if (req.query.modifiedAtMax) params.modifiedAtMax = req.query.modifiedAtMax;
+    
+    // Order state filter (0-10, where 7 = shipped)
+    if (req.query.state) params.orderStateId = req.query.state;
+    
+    // Shop/Platform filter
+    if (req.query.shopId) params.shopId = req.query.shopId;
+    
+    // Tag filter
+    if (req.query.tag) params.tag = req.query.tag;
+    
+    // Minimum order value
+    if (req.query.minOrderValue) params.minOrderValue = req.query.minOrderValue;
+    
+    // Include archived orders
+    if (req.query.includeArchived) params.includeArchived = req.query.includeArchived;
 
-
-
+    const response = await billbeeAPI.get('/orders', { params });
+    
+    // Return structured response with metadata
+    res.json({
+      success: true,
+      pagination: response.data.Paging,
+      totalOrders: response.data.Paging.TotalRows,
+      orders: response.data.Data,
+      appliedFilters: params
+    });
+  } catch (error) {
+    console.error('Error fetching orders:', error.message);
+    res.status(500).json({ 
+      error: 'Failed to fetch orders',
+      details: error.message 
+    });
+  }
+});
 
 // Get products example
 app.get('/products', async (req, res) => {
