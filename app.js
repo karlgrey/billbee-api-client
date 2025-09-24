@@ -99,45 +99,46 @@ app.get('/orders/zero-value', async (req, res) => {
       
       const response = await billbeeAPI.get('/orders', { params });
       
-      // Filter for zero-value orders from this page
+  // Endpoint for zero-value orders - human readable HTML output
+app.get('/orders/zero-value', async (req, res) => {
+  try {
+    let allZeroValueOrders = [];
+    let currentPage = 1;
+    let hasMorePages = true;
+    
+    // Fetch multiple pages to find all zero-value orders
+    while (hasMorePages && allZeroValueOrders.length < 1000) {
+      const params = {
+        page: currentPage,
+        pageSize: 250,
+      };
+      
+      if (req.query.minOrderDate) params.minOrderDate = req.query.minOrderDate;
+      if (req.query.maxOrderDate) params.maxOrderDate = req.query.maxOrderDate;
+      if (req.query.shopId) params.shopId = req.query.shopId;
+      
+      const response = await billbeeAPI.get('/orders', { params });
+      
       const zeroValueFromThisPage = response.data.Data.filter(order => 
         order.TotalCost === 0
       );
       
       allZeroValueOrders = allZeroValueOrders.concat(zeroValueFromThisPage);
       
-      // Check if we need to fetch more pages
-      hasMorePages = currentPage < response.data.Paging.TotalPages && currentPage < 5; // Limit to 5 pages for performance
+      hasMorePages = currentPage < response.data.Paging.TotalPages && currentPage < 10;
       currentPage++;
     }
     
-    // Handle pagination of filtered results
-    const startIndex = (requestedPage - 1) * requestedPageSize;
-    const endIndex = startIndex + requestedPageSize;
-    const paginatedOrders = allZeroValueOrders.slice(startIndex, endIndex);
-    
-    res.json({
-      success: true,
-      description: "Orders with total value of 0 EUR",
-      pagination: {
-        page: requestedPage,
-        pageSize: requestedPageSize,
-        totalZeroValueOrders: allZeroValueOrders.length,
-        totalPages: Math.ceil(allZeroValueOrders.length / requestedPageSize)
-      },
-      orders: paginatedOrders,
-      searchedPages: currentPage - 1,
-      availableFilters: "?minOrderDate=YYYY-MM-DDTHH:mm:ss&maxOrderDate=YYYY-MM-DDTHH:mm:ss&shopId=123&page=1&pageSize=50"
-    });
-    
-  } catch (error) {
-    console.error('Error fetching zero-value orders:', error.message);
-    res.status(500).json({ 
-      error: 'Failed to fetch zero-value orders',
-      details: error.message 
-    });
-  }
-});
+    // Create human-readable HTML
+    let html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Zero Value Orders</title>
+        <style>
+            body { font-family: Arial, sans-serif; margin: 40px; background-color: #f5f5f5; }
+            .container { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+            h1 { color: #333; border-bottom: 3
 
 // Get products example
 app.get('/products', async (req, res) => {
