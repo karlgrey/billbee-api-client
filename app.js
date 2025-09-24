@@ -181,6 +181,64 @@ zeroValueFromThisPage = zeroValueFromThisPage.map(order => {
   }
 });
 
+// Get order by OrderNumber - supports Amazon-style and 5-figure IDs
+app.get('/orders/by-id/:id', async (req, res) => {
+  try {
+    const searchId = req.params.id;
+    let foundOrder = null;
+    let currentPage = 1;
+    let totalPages = 1;
+    
+    // Search through pages until we find the order
+    while (currentPage <= totalPages && !foundOrder) {
+      const params = {
+        page: currentPage,
+        pageSize: 250,
+      };
+      
+      const response = await billbeeAPI.get('/orders', { params });
+      totalPages = response.data.Paging.TotalPages;
+      
+      // Search for order by OrderNumber field only
+      foundOrder = response.data.Data.find(order => 
+        order.OrderNumber === searchId
+      );
+      
+      currentPage++;
+      
+      // Stop searching if we've gone through too many pages without finding it
+      if (currentPage > 100 && !foundOrder) {
+        break;
+      }
+    }
+    
+    if (foundOrder) {
+      res.json({
+        success: true,
+        order: foundOrder,
+        searchedFor: searchId,
+        foundBy: "OrderNumber",
+        searchedPages: currentPage - 1
+      });
+    } else {
+      res.status(404).json({
+        success: false,
+        message: "Order not found",
+        searchedFor: searchId,
+        searchedPages: currentPage - 1,
+        hint: "Use OrderNumber (e.g., '303-9616279-3705151' or 5-figure format)"
+      });
+    }
+    
+  } catch (error) {
+    console.error('Error fetching order by OrderNumber:', error.message);
+    res.status(500).json({ 
+      error: 'Failed to fetch order',
+      details: error.message 
+    });
+  }
+});
+
 // Get products example
 app.get('/products', async (req, res) => {
   try {
