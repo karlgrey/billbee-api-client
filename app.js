@@ -298,6 +298,34 @@ app.get('/products', async (req, res) => {
   }
 });
 
+// Debug endpoint to see sample invoice numbers
+app.get('/orders/debug-invoice-numbers', async (req, res) => {
+  try {
+    const response = await billbeeAPI.get('/orders', { 
+      params: { page: 1, pageSize: 10 } 
+    });
+    
+    const orders = response.data.Data || [];
+    const samples = orders.slice(0, 5).map(order => ({
+      orderId: order.Id,
+      invoiceNumber: order.InvoiceNumber,
+      type: typeof order.InvoiceNumber
+    }));
+    
+    res.json({
+      success: true,
+      totalFound: orders.length,
+      samples: samples
+    });
+    
+  } catch (error) {
+    console.error('Debug endpoint error:', error.message);
+    res.status(500).json({ 
+      error: error.message 
+    });
+  }
+});
+
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
 });
