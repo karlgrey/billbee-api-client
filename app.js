@@ -75,102 +75,38 @@ app.get('/orders', async (req, res) => {
   }
 });
 
-// Enhanced endpoint with extracted comment field
-app.get('/orders/zero-value', async (req, res) => {
-  try {
-    let allZeroValueOrders = [];
-    let currentPage = 1;
-    let totalPages = 1;
+// Add extracted comment field for orders containing "El zu"
+zeroValueFromThisPage = zeroValueFromThisPage.map(order => {
+  if (order.SellerComment && order.SellerComment.toLowerCase().includes('el zu')) {
+    // Find "El zu" in the comment (case insensitive)
+    const comment = order.SellerComment;
+    const lowerComment = comment.toLowerCase();
+    const elZuIndex = lowerComment.indexOf('el zu');
     
-    // Search ALL pages
-    while (currentPage <= totalPages) {
-      const params = {
-        page: currentPage,
-        pageSize: 250,
-      };
+    if (elZuIndex !== -1) {
+      // Extract everything after "El zu" (including the original case)
+      const afterElZu = comment.substring(elZuIndex + 5); // 5 = length of "El zu"
       
-      if (req.query.minOrderDate) params.minOrderDate = req.query.minOrderDate;
-      if (req.query.maxOrderDate) params.maxOrderDate = req.query.maxOrderDate;
-      if (req.query.shopId) params.shopId = req.query.shopId;
+      // Remove all spaces from the extracted part
+      let extractedField = afterElZu.replace(/\s/g, '');
       
-      const response = await billbeeAPI.get('/orders', { params });
-      totalPages = response.data.Paging.TotalPages;
-      
-      // Enhanced zero-value detection
-      let zeroValueFromThisPage = response.data.Data.filter(order => 
-        order.TotalCost === 0 || 
-        order.TotalCost === null || 
-        order.TotalCost === "0" ||
-        order.TotalCost === 0.0 ||
-        Math.abs(order.TotalCost) < 0.01
-      );
-      
-      // Apply seller comment filter if provided
-      if (req.query.sellerComment) {
-        const searchTerm = req.query.sellerComment.toLowerCase();
-        zeroValueFromThisPage = zeroValueFromThisPage.filter(order => 
-          order.SellerComment && 
-          order.SellerComment.toLowerCase().includes(searchTerm)
-        );
-      }
-      
-      // Add extracted comment field for orders containing "El zu"
-      zeroValueFromThisPage = zeroValueFromThisPage.map(order => {
-        if (order.SellerComment && order.SellerComment.toLowerCase().includes('el zu')) {
-          // Find "El zu" in the comment (case insensitive)
-          const comment = order.SellerComment;
-          const lowerComment = comment.toLowerCase();
-          const elZuIndex = lowerComment.indexOf('el zu');
-          
-          if (elZuIndex !== -1) {
-            // Extract everything after "El zu" (including the original case)
-            const afterElZu = comment.substring(elZuIndex + 5); // 5 = length of "El zu"
-            
-            // Remove all spaces from the extracted part
-            const extractedField = afterElZu.replace(/\s/g, '');
-            
-            // Add the new field to the order
-            return {
-              ...order,
-              OriginalOrderID: extractedField
-            };
-          }
+      // Add "D" if it doesn't already start with "D" followed by numbers
+      if (extractedField && !extractedField.match(/^D\d/)) {
+        // Check if it starts with numbers (to avoid adding D to non-numeric strings)
+        if (extractedField.match(/^\d/)) {
+          extractedField = 'D' + extractedField;
         }
-        
-        return order;
-      });
-      
-      allZeroValueOrders = allZeroValueOrders.concat(zeroValueFromThisPage);
-      currentPage++;
-      
-      // Log progress for long searches
-      if (currentPage % 10 === 0) {
-        console.log(`Processed ${currentPage - 1}/${totalPages} pages, found ${allZeroValueOrders.length} matching orders so far`);
       }
+      
+      // Add the new field to the order
+      return {
+        ...order,
+        OriginalOrderID: extractedField
+      };
     }
-    
-    res.json({
-      success: true,
-      description: req.query.sellerComment 
-        ? `Zero-value orders with seller comment containing: "${req.query.sellerComment}"`
-        : "All orders with total value of 0 EUR",
-      totalMatchingOrders: allZeroValueOrders.length,
-      orders: allZeroValueOrders,
-      searchedPages: totalPages,
-      note: 'Orders with "El zu" in SellerComment have an additional "extractedComment" field',
-      appliedFilters: {
-        zeroValue: true,
-        sellerComment: req.query.sellerComment || null
-      }
-    });
-    
-  } catch (error) {
-    console.error('Error fetching filtered orders:', error.message);
-    res.status(500).json({ 
-      error: 'Failed to fetch filtered orders',
-      details: error.message 
-    });
   }
+  
+  return order;
 });
 
 // Get products example
