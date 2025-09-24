@@ -75,7 +75,7 @@ app.get('/orders', async (req, res) => {
   }
 });
 
-// Enhanced endpoint with seller comment filter
+// Enhanced endpoint with extracted comment field
 app.get('/orders/zero-value', async (req, res) => {
   try {
     let allZeroValueOrders = [];
@@ -114,6 +114,32 @@ app.get('/orders/zero-value', async (req, res) => {
         );
       }
       
+      // Add extracted comment field for orders containing "El zu"
+      zeroValueFromThisPage = zeroValueFromThisPage.map(order => {
+        if (order.SellerComment && order.SellerComment.toLowerCase().includes('el zu')) {
+          // Find "El zu" in the comment (case insensitive)
+          const comment = order.SellerComment;
+          const lowerComment = comment.toLowerCase();
+          const elZuIndex = lowerComment.indexOf('el zu');
+          
+          if (elZuIndex !== -1) {
+            // Extract everything after "El zu" (including the original case)
+            const afterElZu = comment.substring(elZuIndex + 5); // 5 = length of "El zu"
+            
+            // Remove all spaces from the extracted part
+            const extractedField = afterElZu.replace(/\s/g, '');
+            
+            // Add the new field to the order
+            return {
+              ...order,
+              extractedComment: extractedField
+            };
+          }
+        }
+        
+        return order;
+      });
+      
       allZeroValueOrders = allZeroValueOrders.concat(zeroValueFromThisPage);
       currentPage++;
       
@@ -131,11 +157,10 @@ app.get('/orders/zero-value', async (req, res) => {
       totalMatchingOrders: allZeroValueOrders.length,
       orders: allZeroValueOrders,
       searchedPages: totalPages,
+      note: 'Orders with "El zu" in SellerComment have an additional "extractedComment" field',
       appliedFilters: {
         zeroValue: true,
-        sellerComment: req.query.sellerComment || null,
-        dateRange: req.query.minOrderDate || req.query.maxOrderDate ? 
-          `${req.query.minOrderDate || 'any'} to ${req.query.maxOrderDate || 'any'}` : null
+        sellerComment: req.query.sellerComment || null
       }
     });
     
