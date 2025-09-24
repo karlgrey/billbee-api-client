@@ -173,16 +173,25 @@ zeroValueFromThisPage = zeroValueFromThisPage.map(order => {
   }
 });
 
-// Get order by OrderNumber - supports Amazon-style and 5-figure IDs
-app.get('/orders/by-id/:id', async (req, res) => {
+// Get multiple orders by InvoiceNumbers - query parameter method
+app.get('/orders/by-invoice-ids', async (req, res) => {
   try {
-    const searchId = req.params.id;
-    let foundOrder = null;
+    const invoiceIds = req.query.ids ? req.query.ids.split(',') : [];
+    
+    if (invoiceIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: "No invoice IDs provided",
+        usage: "?ids=30002,30022,12345"
+      });
+    }
+    
+    let foundOrders = [];
     let currentPage = 1;
     let totalPages = 1;
     
-    // Search through pages until we find the order
-    while (currentPage <= totalPages && !foundOrder) {
+    // Search through all pages
+    while (currentPage <= totalPages) {
       const params = {
         page: currentPage,
         pageSize: 250,
@@ -191,41 +200,41 @@ app.get('/orders/by-id/:id', async (req, res) => {
       const response = await billbeeAPI.get('/orders', { params });
       totalPages = response.data.Paging.TotalPages;
       
-      // Search for order by OrderNumber field only
-      foundOrder = response.data.Data.find(order => 
-        order.OrderNumber === searchId
+      // Find orders matching any of the provided InvoiceNumbers
+      const matchingOrders = response.data.Data.filter(order => 
+        order.InvoiceNumber && invoiceIds.includes(order.InvoiceNumber.toString())
       );
       
+      foundOrders = foundOrders.concat(matchingOrders);
       currentPage++;
       
-      // Stop searching if we've gone through too many pages without finding it
-      if (currentPage > 100 && !foundOrder) {
+      // Stop if we found all requested orders
+      if (foundOrders.length === invoiceIds.length) {
         break;
+      }
+      
+      // Progress logging for large searches
+      if (currentPage % 20 === 0) {
+        console.log(`Searched ${currentPage - 1}/${totalPages} pages, found ${foundOrders.length}/${invoiceIds.length} orders`);
       }
     }
     
-    if (foundOrder) {
-      res.json({
-        success: true,
-        order: foundOrder,
-        searchedFor: searchId,
-        foundBy: "OrderNumber",
-        searchedPages: currentPage - 1
-      });
-    } else {
-      res.status(404).json({
-        success: false,
-        message: "Order not found",
-        searchedFor: searchId,
-        searchedPages: currentPage - 1,
-        hint: "Use OrderNumber (e.g., '303-9616279-3705151' or 5-figure format)"
-      });
-    }
+    res.json({
+      success: true,
+      requestedInvoiceIds: invoiceIds,
+      foundOrders: foundOrders.length,
+      totalRequested: invoiceIds.length,
+      orders: foundOrders,
+      notFound: invoiceIds.filter(id => 
+        !foundOrders.some(order => order.InvoiceNumber && order.InvoiceNumber.toString() === id)
+      ),
+      searchedPages: currentPage - 1
+    });
     
   } catch (error) {
-    console.error('Error fetching order by OrderNumber:', error.message);
+    console.error('Error fetching orders by InvoiceNumbers:', error.message);
     res.status(500).json({ 
-      error: 'Failed to fetch order',
+      error: 'Failed to fetch orders by invoice IDs',
       details: error.message 
     });
   }
