@@ -75,19 +75,18 @@ app.get('/orders', async (req, res) => {
   }
 });
 
-// Debug version to investigate zero-value detection
+// Final endpoint for zero-value orders - searches ALL pages
 app.get('/orders/zero-value', async (req, res) => {
   try {
     let allZeroValueOrders = [];
-    let allOrdersChecked = [];
     let currentPage = 1;
-    let hasMorePages = true;
+    let totalPages = 1; // We'll update this after the first request
     
-    // Search more pages and collect debug info
-    while (hasMorePages && currentPage <= 20) { // Increased from 10 to 20 pages
+    // Search ALL pages
+    while (currentPage <= totalPages) {
       const params = {
         page: currentPage,
-        pageSize: 250,
+        pageSize: 250, // Maximum allowed by API
       };
       
       if (req.query.minOrderDate) params.minOrderDate = req.query.minOrderDate;
@@ -96,40 +95,35 @@ app.get('/orders/zero-value', async (req, res) => {
       
       const response = await billbeeAPI.get('/orders', { params });
       
-      // Collect all orders for analysis
-      allOrdersChecked = allOrdersChecked.concat(response.data.Data);
+      // Update total pages from API response
+      totalPages = response.data.Paging.TotalPages;
       
-      // Try different zero-value conditions
+      // Enhanced zero-value detection
       const zeroValueFromThisPage = response.data.Data.filter(order => 
         order.TotalCost === 0 || 
         order.TotalCost === null || 
         order.TotalCost === "0" ||
         order.TotalCost === 0.0 ||
-        Math.abs(order.TotalCost) < 0.01 // Handle floating point precision
+        Math.abs(order.TotalCost) < 0.01
       );
       
       allZeroValueOrders = allZeroValueOrders.concat(zeroValueFromThisPage);
       
-      hasMorePages = currentPage < response.data.Paging.TotalPages;
       currentPage++;
+      
+      // Optional: Log progress for long-running searches
+      if (currentPage % 10 === 0) {
+        console.log(`Processed ${currentPage - 1}/${totalPages} pages, found ${allZeroValueOrders.length} zero-value orders so far`);
+      }
     }
-    
-    // Analyze the total costs we found
-    const totalCostValues = allOrdersChecked.map(order => order.TotalCost);
-    const uniqueTotalCosts = [...new Set(totalCostValues)].sort((a, b) => a - b);
     
     res.json({
       success: true,
-      description: "Zero-value orders with debug info",
+      description: "ALL orders with total value of 0 EUR",
       totalZeroValueOrders: allZeroValueOrders.length,
-      totalOrdersChecked: allOrdersChecked.length,
-      searchedPages: currentPage - 1,
       orders: allZeroValueOrders,
-      debug: {
-        uniqueTotalCostValues: uniqueTotalCosts.slice(0, 20), // First 20 unique values
-        sampleOrder: allOrdersChecked[0], // Show structure of first order
-        lowestTotalCosts: totalCostValues.filter(cost => cost < 10).sort((a, b) => a - b) // All values under 10
-      }
+      searchedPages: totalPages,
+      totalOrdersInSystem: "All pages searched"
     });
     
   } catch (error) {
