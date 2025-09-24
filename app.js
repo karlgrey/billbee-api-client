@@ -114,7 +114,7 @@ app.get('/orders/zero-value', async (req, res) => {
         );
       }
       
-      // Add extracted comment field for orders containing "El zu"
+     // Add extracted comment field for orders containing "El zu"
 zeroValueFromThisPage = zeroValueFromThisPage.map(order => {
   if (order.SellerComment && order.SellerComment.toLowerCase().includes('el zu')) {
     // Find "El zu" in the comment (case insensitive)
@@ -127,20 +127,12 @@ zeroValueFromThisPage = zeroValueFromThisPage.map(order => {
       const afterElZu = comment.substring(elZuIndex + 5); // 5 = length of "El zu"
       
       // Remove all spaces from the extracted part
-      let extractedField = afterElZu.replace(/\s/g, '');
+      const extractedField = afterElZu.replace(/\s/g, '');
       
-      // Add "D" if it doesn't already start with "D" followed by numbers
-      if (extractedField && !extractedField.match(/^D\d/)) {
-        // Check if it starts with numbers (to avoid adding D to non-numeric strings)
-        if (extractedField.match(/^\d/)) {
-          extractedField = 'D' + extractedField;
-        }
-      }
-      
-      // Add the new field to the order
+      // Add the new field to the order (no "D" prefix logic)
       return {
         ...order,
-        OriginalOrderID: extractedField
+        OriginalInvoiceID: extractedField
       };
     }
   }
