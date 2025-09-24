@@ -75,18 +75,18 @@ app.get('/orders', async (req, res) => {
   }
 });
 
-// Final endpoint for zero-value orders - searches ALL pages
+// Enhanced endpoint with seller comment filter
 app.get('/orders/zero-value', async (req, res) => {
   try {
     let allZeroValueOrders = [];
     let currentPage = 1;
-    let totalPages = 1; // We'll update this after the first request
+    let totalPages = 1;
     
     // Search ALL pages
     while (currentPage <= totalPages) {
       const params = {
         page: currentPage,
-        pageSize: 250, // Maximum allowed by API
+        pageSize: 250,
       };
       
       if (req.query.minOrderDate) params.minOrderDate = req.query.minOrderDate;
@@ -94,12 +94,10 @@ app.get('/orders/zero-value', async (req, res) => {
       if (req.query.shopId) params.shopId = req.query.shopId;
       
       const response = await billbeeAPI.get('/orders', { params });
-      
-      // Update total pages from API response
       totalPages = response.data.Paging.TotalPages;
       
       // Enhanced zero-value detection
-      const zeroValueFromThisPage = response.data.Data.filter(order => 
+      let zeroValueFromThisPage = response.data.Data.filter(order => 
         order.TotalCost === 0 || 
         order.TotalCost === null || 
         order.TotalCost === "0" ||
@@ -107,29 +105,44 @@ app.get('/orders/zero-value', async (req, res) => {
         Math.abs(order.TotalCost) < 0.01
       );
       
-      allZeroValueOrders = allZeroValueOrders.concat(zeroValueFromThisPage);
+      // Apply seller comment filter if provided
+      if (req.query.sellerComment) {
+        const searchTerm = req.query.sellerComment.toLowerCase();
+        zeroValueFromThisPage = zeroValueFromThisPage.filter(order => 
+          order.SellerComment && 
+          order.SellerComment.toLowerCase().includes(searchTerm)
+        );
+      }
       
+      allZeroValueOrders = allZeroValueOrders.concat(zeroValueFromThisPage);
       currentPage++;
       
-      // Optional: Log progress for long-running searches
+      // Log progress for long searches
       if (currentPage % 10 === 0) {
-        console.log(`Processed ${currentPage - 1}/${totalPages} pages, found ${allZeroValueOrders.length} zero-value orders so far`);
+        console.log(`Processed ${currentPage - 1}/${totalPages} pages, found ${allZeroValueOrders.length} matching orders so far`);
       }
     }
     
     res.json({
       success: true,
-      description: "ALL orders with total value of 0 EUR",
-      totalZeroValueOrders: allZeroValueOrders.length,
+      description: req.query.sellerComment 
+        ? `Zero-value orders with seller comment containing: "${req.query.sellerComment}"`
+        : "All orders with total value of 0 EUR",
+      totalMatchingOrders: allZeroValueOrders.length,
       orders: allZeroValueOrders,
       searchedPages: totalPages,
-      totalOrdersInSystem: "All pages searched"
+      appliedFilters: {
+        zeroValue: true,
+        sellerComment: req.query.sellerComment || null,
+        dateRange: req.query.minOrderDate || req.query.maxOrderDate ? 
+          `${req.query.minOrderDate || 'any'} to ${req.query.maxOrderDate || 'any'}` : null
+      }
     });
     
   } catch (error) {
-    console.error('Error fetching zero-value orders:', error.message);
+    console.error('Error fetching filtered orders:', error.message);
     res.status(500).json({ 
-      error: 'Failed to fetch zero-value orders',
+      error: 'Failed to fetch filtered orders',
       details: error.message 
     });
   }
