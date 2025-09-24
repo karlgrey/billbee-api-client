@@ -75,31 +75,7 @@ app.get('/orders', async (req, res) => {
   }
 });
 
-// Endpoint for zero-value orders - fetch and filter locally
-app.get('/orders/zero-value', async (req, res) => {
-  try {
-    const requestedPage = req.query.page ? parseInt(req.query.page) : 1;
-    const requestedPageSize = req.query.pageSize ? parseInt(req.query.pageSize) : 50;
-    
-    let allZeroValueOrders = [];
-    let currentPage = 1;
-    let hasMorePages = true;
-    
-    // We need to fetch multiple pages to find all zero-value orders
-    while (hasMorePages && allZeroValueOrders.length < 1000) { // Safety limit
-      const params = {
-        page: currentPage,
-        pageSize: 250, // Maximum allowed by API
-      };
-      
-      // Add any date filters if provided
-      if (req.query.minOrderDate) params.minOrderDate = req.query.minOrderDate;
-      if (req.query.maxOrderDate) params.maxOrderDate = req.query.maxOrderDate;
-      if (req.query.shopId) params.shopId = req.query.shopId;
-      
-      const response = await billbeeAPI.get('/orders', { params });
-      
-  // Endpoint for zero-value orders - human readable HTML output
+// Endpoint for zero-value orders - human readable HTML output
 app.get('/orders/zero-value', async (req, res) => {
   try {
     let allZeroValueOrders = [];
@@ -138,7 +114,69 @@ app.get('/orders/zero-value', async (req, res) => {
         <style>
             body { font-family: Arial, sans-serif; margin: 40px; background-color: #f5f5f5; }
             .container { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-            h1 { color: #333; border-bottom: 3
+            h1 { color: #333; border-bottom: 3px solid #007cba; padding-bottom: 10px; }
+            .summary { background: #e7f3ff; padding: 15px; border-radius: 5px; margin: 20px 0; }
+            .order { background: #f9f9f9; padding: 15px; margin: 10px 0; border-radius: 5px; border-left: 4px solid #007cba; }
+            .order-header { font-weight: bold; color: #333; font-size: 16px; }
+            .order-details { margin-top: 10px; color: #666; }
+            .no-orders { text-align: center; color: #999; font-style: italic; padding: 40px; }
+            .date { color: #007cba; }
+            .status { background: #28a745; color: white; padding: 2px 8px; border-radius: 3px; font-size: 12px; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>Zero Value Orders Report</h1>
+            <div class="summary">
+                <strong>Total Orders Found:</strong> ${allZeroValueOrders.length}<br>
+                <strong>Generated:</strong> ${new Date().toLocaleString()}<br>
+                <strong>Pages Searched:</strong> ${currentPage - 1}
+            </div>
+    `;
+    
+    if (allZeroValueOrders.length === 0) {
+        html += `<div class="no-orders">No zero-value orders found.</div>`;
+    } else {
+        allZeroValueOrders.forEach(order => {
+            const orderDate = new Date(order.CreatedAt).toLocaleDateString();
+            const customer = order.Customer?.Name || '[Anonymous]';
+            const platform = order.Seller?.Platform || 'Unknown';
+            
+            html += `
+            <div class="order">
+                <div class="order-header">Order #${order.OrderNumber}</div>
+                <div class="order-details">
+                    <strong>Date:</strong> <span class="date">${orderDate}</span><br>
+                    <strong>Customer:</strong> ${customer}<br>
+                    <strong>Platform:</strong> ${platform}<br>
+                    <strong>Total Cost:</strong> €${order.TotalCost}<br>
+                    <strong>Status:</strong> <span class="status">State ${order.State}</span><br>
+                    <strong>Items:</strong> ${order.OrderItems?.length || 0}
+                </div>
+            </div>
+            `;
+        });
+    }
+    
+    html += `
+        </div>
+    </body>
+    </html>
+    `;
+    
+    res.send(html);
+    
+  } catch (error) {
+    res.send(`
+    <html>
+    <body style="font-family: Arial; margin: 40px;">
+        <h1 style="color: red;">Error</h1>
+        <p>Failed to fetch zero-value orders: ${error.message}</p>
+    </body>
+    </html>
+    `);
+  }
+});
 
 // Get products example
 app.get('/products', async (req, res) => {
