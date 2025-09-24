@@ -132,7 +132,7 @@ app.get('/orders/zero-value', async (req, res) => {
             // Add the new field to the order
             return {
               ...order,
-              extractedComment: extractedField
+              OriginalOrderID: extractedField
             };
           }
         }
