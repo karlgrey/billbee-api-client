@@ -75,6 +75,39 @@ app.get('/orders', async (req, res) => {
   }
 });
 
+// Specific endpoint for zero-value orders
+app.get('/orders/zero-value', async (req, res) => {
+  try {
+    const params = {
+      minTotalValue: 0,
+      maxTotalValue: 0, // This should filter for exactly 0 EUR
+      pageSize: req.query.pageSize ? parseInt(req.query.pageSize) : 50
+    };
+    
+    // Allow pagination for zero-value orders
+    if (req.query.page) params.page = parseInt(req.query.page);
+
+    const response = await billbeeAPI.get('/orders', { params });
+    
+    res.json({
+      success: true,
+      description: "Orders with total value of 0 EUR",
+      pagination: response.data.Paging,
+      totalZeroValueOrders: response.data.Paging?.TotalRows || 0,
+      orders: response.data.Data || [],
+      endpoint: "GET /orders/zero-value",
+      queryParams: "?page=1&pageSize=50 (optional)"
+    });
+    
+  } catch (error) {
+    console.error('Error fetching zero-value orders:', error.message);
+    res.status(500).json({ 
+      error: 'Failed to fetch zero-value orders',
+      details: error.message 
+    });
+  }
+});
+
 // Get products example
 app.get('/products', async (req, res) => {
   try {
