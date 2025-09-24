@@ -29,42 +29,48 @@ app.get('/', (req, res) => {
   res.json({ message: 'Billbee API Client is running!' });
 });
 
-// Enhanced orders endpoint with debug info
+// Enhanced orders endpoint with all parameters
 app.get('/orders', async (req, res) => {
   try {
     const params = {};
     
-    // Only test pagination first
+    // Pagination
     if (req.query.page) params.page = parseInt(req.query.page);
     if (req.query.pageSize) params.pageSize = parseInt(req.query.pageSize);
     
-    // Log what we're sending
-    console.log('Query params from request:', req.query);
-    console.log('Params being sent to Billbee:', params);
+    // Date filters (format: YYYY-MM-DDTHH:mm:ss)
+    if (req.query.createdAtMin) params.createdAtMin = req.query.createdAtMin;
+    if (req.query.createdAtMax) params.createdAtMax = req.query.createdAtMax;
+    if (req.query.modifiedAtMin) params.modifiedAtMin = req.query.modifiedAtMin;
+    if (req.query.modifiedAtMax) params.modifiedAtMax = req.query.modifiedAtMax;
     
+    // Order state filter
+    if (req.query.state) params.orderStateId = parseInt(req.query.state);
+    
+    // Shop filter
+    if (req.query.shopId) params.shopId = parseInt(req.query.shopId);
+    
+    // Tag filter
+    if (req.query.tag) params.tag = req.query.tag;
+    
+    // Minimum total value
+    if (req.query.minTotalValue) params.minTotalValue = parseFloat(req.query.minTotalValue);
+
     const response = await billbeeAPI.get('/orders', { params });
     
-    console.log('Response pagination:', response.data.Paging);
-    console.log('Full request URL would be:', `${BILLBEE_BASE_URL}/orders?${new URLSearchParams(params).toString()}`);
-    
     res.json({
-      debug: {
-        receivedQuery: req.query,
-        sentParams: params,
-        fullUrl: `${BILLBEE_BASE_URL}/orders?${new URLSearchParams(params).toString()}`,
-        actualPagination: response.data.Paging
-      },
+      success: true,
       pagination: response.data.Paging,
-      orderCount: response.data.Data?.length || 0,
-      firstOrderId: response.data.Data?.[0]?.Id || 'none',
-      lastOrderId: response.data.Data?.[response.data.Data?.length - 1]?.Id || 'none'
+      totalOrders: response.data.Paging?.TotalRows || 0,
+      orders: response.data.Data || [],
+      appliedFilters: params
     });
     
   } catch (error) {
-    console.error('Error:', error.response?.data || error.message);
+    console.error('Error fetching orders:', error.message);
     res.status(500).json({ 
-      error: error.message,
-      details: error.response?.data
+      error: 'Failed to fetch orders',
+      details: error.message 
     });
   }
 });
